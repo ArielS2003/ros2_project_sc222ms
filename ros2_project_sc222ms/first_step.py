@@ -1,20 +1,16 @@
 # Exercise 1 - Display an image of the camera feed to the screen
 
 #from __future__ import division
-import threading
 import rclpy
 import cv2
-import numpy as np
-import sys
 from rclpy.node import Node
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge, CvBridgeError
-from rclpy.exceptions import ROSInterruptException
 import signal
 
-class ColourIdentifier(Node):
+class FirstStep(Node):
     def __init__(self):
-        super().__init__('colour_identifier')
+        super().__init__('first_step')
 
         # Initialize CvBridge to convert ROS image messages to OpenCV images
         self.bridge = CvBridge()
@@ -22,56 +18,53 @@ class ColourIdentifier(Node):
         # Create a subscriber to the camera image topic (camera/image_raw)
         self.subscription = self.create_subscription(
             Image,
-            '/camera/image_raw',
-            self.callback,
-            10
+            '/camera/image_raw',  # Subscribe to the topic
+            self.callback,         # Callback function to handle image data
+            10                     # Queue size
         )
-        self.subscription  # prevent unused variable warning
+        self.subscription  # Prevent unused variable warning
 
     def callback(self, data):
         try:
-            # Convert the ROS image message to OpenCV image format
+            # Convert the ROS image message to OpenCV image format ('bgr8' represents BGR format)
             image = self.bridge.imgmsg_to_cv2(data, 'bgr8')
 
-            # Create a window for displaying the image
+            # Create a resizable window to display the image
             cv2.namedWindow('camera_feed', cv2.WINDOW_NORMAL)
 
-            # Display the image in the created window
+            # Display the image
             cv2.imshow('camera_feed', image)
 
             # Resize the window to fit the screen
             cv2.resizeWindow('camera_feed', 320, 240)
 
-            # Wait for a key press for 3 ms, necessary for OpenCV window to update
+            # Wait for 3 milliseconds to allow the window to update
             cv2.waitKey(3)
 
         except CvBridgeError as e:
             self.get_logger().error(f"Error converting image: {e}")
 
-# Function to handle cleanup when the program is interrupted
 def main():
+    # Initialize the ROS2 node
+    rclpy.init(args=None)
+    first_step = FirstStep()
+
+    # Signal handler to gracefully shutdown when Ctrl+C is pressed
     def signal_handler(sig, frame):
         rclpy.shutdown()
+        cv2.destroyAllWindows()  # Close any OpenCV windows
+        exit(0)
 
-    # Initialize the ROS node
-    rclpy.init(args=None)
-    colour_identifier = ColourIdentifier()
-
-    # Ensure that the node keeps running
     signal.signal(signal.SIGINT, signal_handler)
-    thread = threading.Thread(target=rclpy.spin, args=(colour_identifier,), daemon=True)
-    thread.start()
 
     try:
-        while rclpy.ok():
-            continue
-
-    except ROSInterruptException:
+        # Spin the ROS2 node to handle incoming messages
+        rclpy.spin(first_step)
+    except KeyboardInterrupt:
         pass
+    finally:
+        # Ensure OpenCV windows are closed before shutting down
+        cv2.destroyAllWindows()
 
-    # Close any OpenCV windows before shutting down
-    cv2.destroyAllWindows()
-
-# Check if the node is being run as the main program
 if __name__ == '__main__':
     main()
